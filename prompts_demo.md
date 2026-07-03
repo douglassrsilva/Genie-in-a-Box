@@ -294,6 +294,153 @@ reflejados en cada gráfico) sin tocar una sola línea de CSS. Para una demo con
 reemplaza esa paleta por los colores corporativos del cliente o del evento — el mecanismo es
 idéntico.
 
+### Prompt C · Versión técnica exacta (reproducibilidad garantizada)
+
+> Los prompts A y B de arriba son la vía "guiada" — funcionan, pero requirieron 2-3 rondas de
+> iteración en el test (formato de números, dimensiones faltantes, ajuste de escala). Este
+> prompt es la **especificación exacta** que Genie Code generó al pedirle "el prompt completo
+> para reproducir este dashboard desde cero" sobre la versión ya corregida y temada — pensado
+> para pegarlo una sola vez y obtener el resultado final directamente, sin rondas de fix.
+>
+> ⚠️ No verificado de punta a punta por el equipo: la paleta de colores fue refinada a tonos
+> NES más auténticos (`#5C94FC`/`#E44028`, distintos a los del Prompt B) y usa la fuente
+> **Orbitron**, que no se confirmó visualmente que renderice — Lakeview podría no soportar esa
+> familia tipográfica y caer en un fallback silencioso. Antes de usar esto en una demo en vivo,
+> córrelo una vez y confirma el resultado visual; si la fuente no aplica, usa una de las
+> alternativas que el propio prompt sugiere (Space Grotesk, Space Mono, JetBrains Mono).
+
+```
+Objetivo: Crear el dashboard "🍄 Grupo Cóndor - Dashboard Ejecutivo" con tema visual Super
+Mario Bros NES y 10 widgets usando metric views de main.grupo_condor.
+
+PASO 1 — Datasets (6 datasets)
+
+4 UC Metric Views (importar con metricViewName):
+datasets/metrics_grupo → main.grupo_condor.metrics_grupo
+datasets/metrics_cartera → main.grupo_condor.metrics_cartera
+datasets/metrics_envios → main.grupo_condor.metrics_envios
+datasets/metrics_retail → main.grupo_condor.metrics_retail
+
+1 SQL dataset para el counter (evitar floating point del MEASURE):
+-- datasets/counter_ingresos_sql, displayName: "Counter Ingresos"
+SELECT ROUND(SUM(ingreso_usd), 0) as ingresos_totales
+FROM main.grupo_condor.gold_ingresos_diarios
+
+1 SQL dataset para la tabla comparativa:
+-- datasets/comparativa_q4_q1, displayName: "Comparativa Q4 vs Q1"
+WITH q4 AS (
+  SELECT categoria, pais,
+         CAST(ROUND(SUM(ingresos_usd), 2) AS DECIMAL(18,2)) as ingresos_q4
+  FROM main.grupo_condor.gold_ventas_categoria
+  WHERE DATE_FORMAT(fecha, 'yyyy-MM') IN ('2025-10','2025-11','2025-12')
+  GROUP BY categoria, pais
+), q1 AS (
+  SELECT categoria, pais,
+         CAST(ROUND(SUM(ingresos_usd), 2) AS DECIMAL(18,2)) as ingresos_q1
+  FROM main.grupo_condor.gold_ventas_categoria
+  WHERE DATE_FORMAT(fecha, 'yyyy-MM') IN ('2026-01','2026-02','2026-03')
+  GROUP BY categoria, pais
+)
+SELECT q4.categoria, q4.pais, q4.ingresos_q4, q1.ingresos_q1,
+       CAST(ROUND((q1.ingresos_q1 - q4.ingresos_q4) / q4.ingresos_q4 * 100, 1)
+            AS DECIMAL(10,1)) as variacion_pct
+FROM q4 JOIN q1 ON q4.categoria = q1.categoria AND q4.pais = q1.pais
+ORDER BY variacion_pct ASC
+
+PASO 2 — Tema NES Mario Bros
+
+updateDashboardTheme:
+  canvasBackgroundColor:    light "#5C94FC"     (NES sky blue)
+  widgetBackgroundColor:    light "#FCFCFC"
+  widgetBorderColor:        light "#E44028"     (NES Mario red)
+  widgetCornerRadius:       4                   (blocky/pixelado)
+  widgetShadow:             0                   (flat retro)
+  widgetMargin:             8
+  widgetPadding:            12
+  widgetHeaderAlignment:    "center"
+  selectionColor:           light "#FAC000"     (gold coin)
+  axisLineColor:            light "#AC7C00"     (brown brick)
+  gridLineColor:            light "#DEB887"     (warm sand)
+  fontFamily:               "Orbitron"          (arcade font)
+  fontColor:                light "#3C2415"     (dark brick brown)
+  fontSettings:
+    base:        { fontFamily: "Orbitron", fontSize: 11, fontWeight: 500 }
+    widgetTitle: { fontFamily: "Orbitron", fontSize: 13, fontWeight: 900,
+                   textCase: "uppercase", fontColor: light "#E44028" }
+  visualizationColors:      ["#E44028","#5C94FC","#FAC000","#00A800",
+                             "#FC9838","#AC7C00","#F8B8F8","#0058F8"]
+  continuousGradient:       custom-sequential start "#FAC000" end "#E44028"
+
+Fuentes alternativas open source si Orbitron no existe: Space Grotesk, Space Mono,
+JetBrains Mono.
+
+PASO 3 — Layout de Widgets (página "⭐ WORLD 1-1", grid 12 columnas)
+
+Row | Col | W  | H | Widget                        | Tipo
+0   | 0   | 12 | 2 | Header Mario                  | text
+2   | 0   | 6  | 3 | Ingresos Totales Grupo         | counter
+2   | 6   | 6  | 3 | Tasa de Morosidad              | counter
+5   | 0   | 6  | 3 | OTIF Promedio                  | counter
+5   | 6   | 6  | 3 | Ticket Promedio ELECTRO        | counter
+8   | 0   | 6  | 6 | Ingresos por País              | bar (horizontal)
+8   | 6   | 6  | 6 | Cartera por Rango de Mora      | pie (donut)
+14  | 0   | 12 | 6 | Composición % Mensual por BU   | bar (percent-stack)
+20  | 0   | 6  | 6 | ELECTRO Chile - Tendencia      | line
+20  | 6   | 6  | 6 | Comparativa Q4 vs Q1           | table
+
+PASO 4 — Specs de cada Widget
+
+Header (text):
+# 🍄 GRUPO CÓNDOR ⭐ DASHBOARD EJECUTIVO 🍄
+### 🏁 WORLD 1-1 • COIN × $7.8M • LIVES × 6 PAÍSES
+
+Counter Ingresos Totales: dataset=counter_ingresos_sql, field=`ingresos_totales`,
+disaggregatedData=true, format=number-currency/compact/USD/max 1 decimal
+
+Counter Morosidad: dataset=metrics_cartera, field=MEASURE(`tasa_morosidad_pct`),
+format=number-plain/none/exact 1 decimal + formatTemplate "{{ @formatted }}%"
+
+Counter OTIF: dataset=metrics_envios, field=MEASURE(`otif_pct`), format igual al de morosidad
+
+Counter Ticket ELECTRO: dataset=metrics_retail, field=MEASURE(`ticket_promedio_usd`),
+filter=`categoria` IN ('ELECTRO'), format=number-currency/none/USD/exact 2 decimals
+
+Bar Ingresos por País (horizontal): dataset=metrics_grupo, fields=[`pais`,
+MEASURE(`ingresos_usd`)], x=measure (quantitative, currency compact), y=pais (categorical)
+
+Pie Cartera por Mora: dataset=metrics_cartera, fields=[`rango_mora`,
+MEASURE(`saldo_total_usd`)], angle=saldo (quantitative), color=rango_mora (categorical),
+label.show=true
+
+Bar % Composición Mensual: dataset=metrics_grupo, fields=[`mes`, `unidad_negocio`,
+MEASURE(`ingresos_usd`)], filter=`mes` < '2026-07', mark.layout="percent-stack",
+x=mes (categorical), y=ingresos (quantitative), color=unidad_negocio (categorical)
+
+Line ELECTRO Chile: dataset=metrics_retail, fields=[`mes`, MEASURE(`ingresos_usd`)],
+filters=[`categoria` IN ('ELECTRO'), `pais` IN ('CL'), `mes` < '2026-07'],
+x=mes (categorical), y=ingresos (quantitative, currency compact)
+
+Table Comparativa: dataset=comparativa_q4_q1, fields=[categoria, pais, ingresos_q4,
+ingresos_q1, variacion_pct], disaggregatedData=true, columns con format currency en los
+ingresos y formatTemplate "{{ @formatted }}%" en variacion
+
+PASO 5 — Publicar
+
+publishDashboard(embedCredentials=true)
+
+Notas técnicas para el agente:
+1. Metric views + MEASURE(): el fieldName retornado por el query engine es "measure(col_name)",
+   no el alias del campo. Alinear el encoding.fieldName con esto.
+2. Floating point: nunca usar MEASURE() directo en counters que muestran valores absolutos
+   grandes — crear un SQL dataset con ROUND(). Para tablas, usar CAST(ROUND(...) AS DECIMAL).
+3. Mes incompleto: siempre filtrar el mes en curso con `mes` < 'YYYY-MM' en gráficos de serie
+   temporal.
+4. Percent-stack: widgetType="bar" + mark.layout="percent-stack" (no existe un widgetType
+   "stacked-bar").
+5. Fuentes arcade disponibles: Orbitron (mejor si renderiza), Space Grotesk, Space Mono,
+   JetBrains Mono.
+```
+
 ---
 
 ## Troubleshooting
