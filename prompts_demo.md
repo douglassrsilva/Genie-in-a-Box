@@ -130,6 +130,29 @@ ejecutando y validando SQL sobre Databricks, extendiendo un modelo de datos ya e
 es Genie Code. Todo lo que van a preguntar después ya estaba armado así, minutos antes de
 subir al escenario."
 
+### Prompt 4 · Crear el Genie Space (ejecutar ANTES del evento)
+
+> Validado: Genie Code SÍ puede crear un Genie Space nuevo por prompt — título, warehouse y
+> fuentes de datos (Metric Views) quedan configurados correctamente sin intervención manual.
+> ⚠️ Limitación real encontrada: **las General Instructions NO se pueden fijar por prompt** —
+> las escrituras del agente caen en un campo interno (`description`) que no es el que usa el
+> motor NL→SQL. Después de este prompt, pega el texto de la sección "Instructions del Genie
+> Space" (más abajo) manualmente en **Configure → Instructions → Text → General Instructions**,
+> y verifica visualmente que quedó ahí — no confíes en que el agente lo haya hecho.
+
+```
+Crea un nuevo Genie Space en Databricks (un AI/BI Genie Space real, no un chat de Genie Code)
+llamado "Grupo Cóndor - KPIs Corporativos", con descripción "Asistente analítico del Grupo
+Cóndor". Agrega como fuentes de datos las Metric Views main.grupo_condor.metrics_grupo,
+metrics_cartera, metrics_envios y metrics_retail. Usa el SQL Warehouse Serverless disponible.
+Al final, dime explícitamente si pudiste configurar las General Instructions vía API o si
+quedó pendiente de configuración manual en la UI.
+```
+
+**Resultado esperado**: Space creado con las 4 Metric Views como fuente (verificable en
+Configure → Data). El propio agente debería reportar que las Instructions quedaron
+pendientes — si dice lo contrario, verifícalo tú igual.
+
 ---
 
 ## BLOQUE 2 — Genie Space en modo Chat (rápido, NL→SQL directo)
@@ -195,6 +218,84 @@ responsables. Esto es Genie Ontology funcionando: contexto certificado + razonam
 
 ---
 
+## BLOQUE OPCIONAL — Dashboard AI/BI hiper-personalizado con Genie Code
+
+> Módulo adicional (no forma parte del guion base de 25 min) para audiencias que quieran ver
+> a Genie Code construyendo un **dashboard Lakeview real** de punta a punta — datasets,
+> widgets y hasta la identidad visual — sin tocar el editor manualmente. Prepararlo antes del
+> evento; se puede mostrar como "bonus" si sobra tiempo, o mencionar solo el resultado final.
+
+### Prompt A · Construir el dashboard base
+
+```
+Crea un dashboard AI/BI (Lakeview) real en Databricks (no un notebook) llamado "Grupo Cóndor
+- Dashboard Ejecutivo", usando datos de main.grupo_condor. El dashboard debe tener:
+1. Una fila superior con 4 KPI counters: ingresos totales del grupo, tasa de morosidad
+   promedio, OTIF promedio, ticket promedio de ELECTRO
+2. Un gráfico de barras horizontal: ingresos totales por país
+3. Un gráfico de líneas: evolución mensual de ingresos por unidad de negocio (RETAIL/PAGOS/CARGO)
+4. Un gráfico de dona: distribución de cartera de créditos por rango_mora
+Usa las Metric Views existentes (metrics_grupo, metrics_cartera, metrics_envios,
+metrics_retail) como fuente de datos. Aplica un layout de grid de 12 columnas, prolijo y con
+buen espaciado. Publica el dashboard al finalizar. No me pidas aprobaciones intermedias.
+```
+
+> ⚠️ Lección del test: el primer resultado suele venir **genérico** — números sin formatear,
+> dimensiones ricas del dataset sin usar (ej. categoría de producto), y gráficos que comparan
+> magnitudes muy distintas en la misma escala (una unidad de negocio 15x más grande que otra
+> vuelve ilegibles a las demás). No es falta de datos — es que el primer prompt no pidió
+> explotar esas dimensiones. Un segundo prompt de refinamiento es casi siempre necesario:
+
+```
+Corrige y enriquece el dashboard:
+1. Verifica que los counters numéricos muestren formato compacto legible (ej: $7,8M), sin
+   decimales de más ni errores de punto flotante — envuelve las expresiones en ROUND().
+2. Agrega widgets que usen la dimensión categoría de producto de metrics_retail: evolución
+   mensual de la categoría con mayor variación, y una tabla comparativa por categoría y país
+   ordenada por variación % ascendente.
+3. Si algún gráfico compara magnitudes muy distintas entre series (ej. unidades de negocio de
+   tamaño muy dispar), conviértelo a porcentaje/composición en vez de valores absolutos.
+4. Excluye del análisis mensual el mes en curso si está incompleto (evita barras/puntos
+   distorsionados al final de la serie).
+Verifica cada cambio con una query antes de darlo por hecho. Publica al finalizar.
+```
+
+**Nota operativa importante**: en el test, el botón "Publish" del editor de dashboards (beta)
+resultó poco confiable — a veces requiere más de un intento, y en un caso Genie Code intentó
+publicar vía API y fue bloqueado por guardrails de seguridad internos (protección contra
+mutaciones no autorizadas de assets del workspace). **Siempre verifica manualmente la URL
+publicada antes de la demo en vivo** — no confíes en el mensaje de confirmación del agente.
+
+### Prompt B · Identidad visual 100% personalizada
+
+> Validado: Lakeview soporta un **tema completamente custom** (no solo paletas predefinidas) —
+> color de fondo del canvas y widgets, bordes, ejes/grid, color de selección, paleta
+> categórica ilimitada, tipografía (familia/tamaño/peso/color) por título y valor, padding/
+> radius/shadow de widgets, y gradientes continuos para heatmaps. Lo único que NO soporta es
+> CSS arbitrario o imágenes de fondo. Se configura en **Settings → Theme** del dashboard.
+
+Ejemplo genérico (reemplaza colores por la identidad de marca del cliente o del evento):
+
+```
+Personaliza la identidad visual de este dashboard aplicando estos colores en Settings > Theme
+> Color palette:
+- Color primario / títulos de widgets: {color 1, ej. #E52521}
+- Bordes de widgets: {color 2, ej. #049CD8}
+- Fondo del canvas: {color 3 claro, ej. #E4F6FF}
+- Paleta categórica de gráficos: {lista de 4-8 colores hex}
+Aplica también tipografía consistente (ej. Poppins) y esquinas redondeadas en los widgets.
+No uses CSS custom ni imágenes externas — solo las opciones nativas del editor de tema.
+```
+
+Como prueba de concepto se validó con una paleta temática de **Super Mario Bros** (rojo
+`#E52521`, azul `#049CD8`, amarillo `#FBD000`, verde `#43B047`, fondo cielo `#E4F6FF`) — el
+resultado fue un dashboard completamente re-skinned (fondo, bordes, títulos y los 4 colores
+reflejados en cada gráfico) sin tocar una sola línea de CSS. Para una demo con clientes,
+reemplaza esa paleta por los colores corporativos del cliente o del evento — el mecanismo es
+idéntico.
+
+---
+
 ## Troubleshooting
 
 | Síntoma | Causa raíz | Fix |
@@ -204,6 +305,10 @@ responsables. Esto es Genie Ontology funcionando: contexto certificado + razonam
 | El Genie Space responde "no existe columna X" | La capa gold no incluye la dimensión que la pregunta necesita | Revisar que todas las dimensiones de negocio relevantes estén en alguna tabla gold / Metric View |
 | Las respuestas no siguen las reglas de negocio esperadas | Las instructions no se guardaron en el lugar correcto | Verificar en **Configure → Instructions → Text → General Instructions** — no confundir con el campo "Description" de la pestaña About |
 | Una pregunta en modo Agent tarda varios minutos incluso siendo simple | El modo Agent hace razonamiento multi-step por diseño — no es para Q&A rápido | Usar Chat mode para preguntas rápidas; reservar Agent solo para el informe de cierre |
+| Genie Code crea el Genie Space pero las Instructions "no pegaron" | Solo puede escribir el campo `description` (About), no el campo real de Instructions | Pegar las Instructions manualmente en Configure → Instructions → Text — SIEMPRE verificar visualmente |
+| Counters/tablas del dashboard muestran números con muchos decimales | `SUM()` sobre columnas DOUBLE genera errores de punto flotante | Envolver la expresión en `ROUND(..., n)` o `CAST(... AS DECIMAL(18,2))` en el dataset SQL |
+| El botón "Publish" del editor de dashboards no responde al primer clic | Comportamiento inconsistente del editor (beta) | Reintentar el clic; verificar la URL publicada manualmente antes de confiar en la confirmación del agente |
+| Genie Code reporta "blocked by IP access list" o "blocked by safety guardrails" al intentar publicar/mutar un asset vía API | Protecciones internas contra mutaciones no autorizadas de infraestructura compartida | Es un límite esperado, no un bug a resolver — publica manualmente desde la UI cuando esto ocurra |
 
 ---
 
